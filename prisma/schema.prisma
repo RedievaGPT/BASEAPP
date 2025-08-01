@@ -1,0 +1,274 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  role          Role      @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+  expenses Expense[]
+  quotes   Quote[]
+  invoices Invoice[]
+
+  @@map("users")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  taxId       String?
+  email       String?
+  phone       String?
+  address     String?
+  logo        String?
+  website     String?
+  currency    String   @default("USD")
+  taxRate     Decimal  @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("companies")
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  taxId     String?
+  email     String?
+  phone     String?
+  address   String?
+  status    Status   @default(ACTIVE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quotes   Quote[]
+  invoices Invoice[]
+
+  @@map("customers")
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  sku         String   @unique
+  price       Decimal
+  cost        Decimal  @default(0)
+  stock       Int      @default(0)
+  image       String?
+  status      Status   @default(ACTIVE)
+  categoryId  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category   Category?    @relation(fields: [categoryId], references: [id])
+  quoteItems QuoteItem[]
+  invoiceItems InvoiceItem[]
+
+  @@map("products")
+}
+
+model Quote {
+  id         String      @id @default(cuid())
+  number     String      @unique
+  customerId String
+  userId     String
+  date       DateTime    @default(now())
+  validUntil DateTime
+  subtotal   Decimal
+  tax        Decimal     @default(0)
+  total      Decimal
+  status     QuoteStatus @default(DRAFT)
+  notes      String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  customer Customer     @relation(fields: [customerId], references: [id])
+  user     User         @relation(fields: [userId], references: [id])
+  items    QuoteItem[]
+  invoices Invoice[]
+
+  @@map("quotes")
+}
+
+model QuoteItem {
+  id          String  @id @default(cuid())
+  quoteId     String
+  productId   String
+  quantity    Int
+  unitPrice   Decimal
+  discount    Decimal @default(0)
+  total       Decimal
+
+  quote   Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("quote_items")
+}
+
+model Invoice {
+  id         String        @id @default(cuid())
+  number     String        @unique
+  customerId String
+  userId     String
+  quoteId    String?
+  date       DateTime      @default(now())
+  dueDate    DateTime
+  subtotal   Decimal
+  tax        Decimal       @default(0)
+  total      Decimal
+  paid       Decimal       @default(0)
+  status     InvoiceStatus @default(PENDING)
+  notes      String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  customer Customer      @relation(fields: [customerId], references: [id])
+  user     User          @relation(fields: [userId], references: [id])
+  quote    Quote?        @relation(fields: [quoteId], references: [id])
+  items    InvoiceItem[]
+  payments Payment[]
+
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  productId   String
+  quantity    Int
+  unitPrice   Decimal
+  discount    Decimal @default(0)
+  total       Decimal
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("invoice_items")
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  invoiceId   String
+  amount      Decimal
+  method      PaymentMethod @default(CASH)
+  reference   String?
+  date        DateTime      @default(now())
+  notes       String?
+  createdAt   DateTime      @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@map("payments")
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  userId      String
+  description String
+  amount      Decimal
+  category    String
+  date        DateTime @default(now())
+  receipt     String?
+  status      Status   @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("expenses")
+}
+
+enum Role {
+  ADMIN
+  USER
+  READONLY
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+  CHECK
+  OTHER
+}
